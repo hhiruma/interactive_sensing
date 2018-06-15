@@ -68,7 +68,7 @@ void setup() {
 
 void draw() {
   //play all notes in playlist
-  while (playList.size() > 0) {
+  if (playList.size() > 0) {
     global_play_tmp = playList.remove();
     thread("playNote");
   }
@@ -81,8 +81,8 @@ void playNote() {
   int velocity = 127;
   int pitch = global_play_tmp;
 
-  print("Play: ");
-  println(pitch);
+  //print("Play: ");
+  //println(pitch);
 
   mb.sendNoteOn(channel, pitch, velocity); 
   delay(500);
@@ -106,13 +106,17 @@ void keyTyped() {
   }
 }
 
+int counter = 0;
+
 void serialEvent(Serial p){
   int input = p.read();
   if(input >= 0 && input <= 8){
     playList.add(drumList[input].pitch);
+    counter++;
   } else {
-    print("input is invalid");
+    println("***input is invalid***");
   }
+  println("received note: " + input + ", counter = " + counter);
 }
 
 /*

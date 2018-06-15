@@ -48,22 +48,25 @@ void loop() {
 }
 
 void moveArm(int sa){
-  if(abs(sa) >1){
-    if(abs(sa) == 3){
-      //差が３
-      
-    }else{
-      //差が２
-      
-    }
-  }else if(abs(sa) == 1){
-    //差が１
-    
-  }else{
-    //この時は差は０なのでそのまま
-  }
-}
+  switch(abs(sa)){
+    case 3: //差が３
 
+    break;
+    case 2: //差が２
+
+     break;
+    case 1:
+
+     break;
+    case 0:
+     break;
+    default:
+     throw();
+    
+  }
+
+
+  
 void hit(){
   //ここで両手を叩かせる，今考えているのは角度を分割してfor文で交互に回すことによって同時のように見えさせる
   

@@ -2,6 +2,8 @@ const int sensorPins[6] = {
   A0, A1, A2, A3, A4, A5
 };
 
+boolean flag = false;
+
 void setup() {
   // put your setup code here, to run once:
   Serial.begin(9600);
@@ -9,10 +11,16 @@ void setup() {
 
 void loop() {
   int sensorValues[6];
-  for(int i=0; i<4; i++){
+  flag = false;
+  
+  for(int i=0; i<6; i++){
     if((sensorValues[i] = analogRead(sensorPins[i])) != 0){
       Serial.write(i);
-      delay(5);
+      flag = true;
     }
+  }
+
+  if(flag) {    
+    delay(100);
   }
 }

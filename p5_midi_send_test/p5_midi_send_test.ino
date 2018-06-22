@@ -13,7 +13,7 @@ void loop() {
   int sensorValues[6];
   flag = false;
   
-  for(int i=0; i<6; i++){
+  for(int i=0; i<1; i++){
     if((sensorValues[i] = analogRead(sensorPins[i])) != 0){
       Serial.write(i);
       flag = true;

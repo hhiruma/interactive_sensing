@@ -2,82 +2,153 @@
 #include <LightChrono.h>
 #include <Servo.h>
 
-Chrono myChrono;
-Servo myServo;
-Servo myServo2;
+#define RIGHT 0
+#define LEFT 1
+#define BOTH 2
+#define SHOULDER 0
+#define ELBOW 1
 
-//楽譜，０１２３で左から順,4は叩かない
+#define T_MOVE 0
+#define T_HIT 500
+#define T_RESET 1000
 
+#define SHEET_LEN 4
+#define DRUM_NUM 6
 
+//時間計測器
+Chrono timer;
 
-int sheet[2][4] ={{4,4,4,4},{4,4,4,4}};
-int nowtime = 0;
-int nowPlace[] = {0,0}; //[0]がR,[1]がL
+//サーボの宣言
+Servo servos[2][2];
+
+//肩の位置の宣言
+/*
+ * 左肩の角度に関してはまだ未実装なので修正する必要あり
+ */
+const int shoulderAngle[2][DRUM_NUM/2] = {{165, 90, 15}, {15, 15, 15}};
+
+//楽譜の長さ設定
+const int sheetLen = 4;
+
+//楽譜，０１2で左から順,-1は叩かない
+int sheet[2][SHEET_LEN];
+//sheet[0]: 右譜面
+//sheet[1]: 左譜面
+
+//打った回数を入れるカウンタ
+int hitCounter = 0;
+
+//次に打つ位置
+int rightNextPos;
+int leftNextPos;
 
 void setup() {
-  // put your setup code here, to run once:
-  myServo.attach(9); // サーボを９ピンにつける
-  myServo2.attach(8); // サーボを９ピンにつける
-  
+  //サーボの割り当て
+  servos[RIGHT][SHOULDER].attach(8);  // 8 : 右肩
+  servos[RIGHT][ELBOW].attach(9);  // 9 : 右肘
+  servos[LEFT][SHOULDER].attach(10);  // 10: 左肩
+  servos[LEFT][ELBOW].attach(11);  // 11: 左肘
+
+  //楽譜の初期化
+  for (int i = 0; i < sheetLen; i++) {
+    sheet[RIGHT][i] = -1;
+    sheet[LEFT][i] = -1;
+  }
 }
-
-  
-void hit(){
-  //ここで両手を叩かせる，今考えているのは角度を分割してfor文で交互に回すことによって同時のように見えさせる
-Serial.println("Hit!");
-  
-}
-
-
 
 void loop() {
-  // put your main code here, to run repeatedly:
-  if(myChrono.hasPassed(500)){
+  //T_MOVE ~ 5sec： reset直後、腕を動かす時間
+  if (timer.hasPassed(T_MOVE) && timer.hasPassed(T_MOVE+5)) {
+    int nextCount = hitCounter + 1;
     //ここで楽譜を読んでアーム移動
-    
-    if(sheet[0][(nowtime+1)%4] =! 4){
-      moveArm(sheet[0][(nowtime+1)%4]-nowPlace[0]);
-      nowPlace[0] = sheet[0][(nowtime+1)%4];
-    }
-    if(sheet[1][(nowtime+1)%4] =! 4){
-      moveArm(sheet[1][(nowtime+1)%4]-nowPlace[1]);
-      nowPlace[1] = sheet[1][(nowtime+1)%4];
+
+    //次の位置
+    rightNextPos = sheet[RIGHT][nextCount % SHEET_LEN];
+    leftNextPos = sheet[LEFT][nextCount % SHEET_LEN];
+
+    //次の位置に移動
+    moveArm(RIGHT, rightNextPos);
+    //角度が未実装なため左のmoveArmはコメントアウト
+//    moveArm(LEFT , leftNextPos);
+  }
+
+
+
+  //T_IHT ~ 5sec: 腕を動かした後、打つタイミング
+  if (timer.hasPassed(T_HIT) && !timer.hasPassed(T_HIT+5)) {
+    if (sheet[RIGHT][hitCounter % SHEET_LEN] != -1) {
+      if (sheet[LEFT][hitCounter % SHEET_LEN] != -1) {
+        hit(BOTH);
+      } else {
+        hit(RIGHT);
+      }
+    } else {
+      if (sheet[LEFT][hitCounter % SHEET_LEN] != -1) {
+        hit(LEFT);
+      }
     }
   }
+
+
+  //T_RESET: 全ての作業が終わってると見込まれる時間
+  if (timer.hasPassed(T_RESET)) {
+    //hitCounterが大きくなりすぎたとき用
+    if (hitCounter < 5001) {
+      hitCounter++;
+    } else {
+      hitCounter = (hitCounter + 1) % SHEET_LEN;
+    }
+
+    //タイマーをリセットする
+    timer.restart();
+  }
+
+}
+
+void moveArm(int arm, int nextPos) {
+  if(nextPos == -1) return;
   
-  if(myChrono.hasPassed(1000)){
-    //ここで叩いてカウント初期化
-    hit();
+  if (arm == RIGHT) {
+    servos[RIGHT][SHOULDER].write(shoulderAngle[RIGHT][nextPos]);
+  } else {
+    //左腕ようの何かしらの計算が必要...?
 
-    //nowtimeが大きくなりすぎたとき用
-    if(nowtime < 5001){
-      nowtime++;
-    }else{
-      nowtime = (nowtime+1)%4;
-    }
-    myChrono.restart();
+    /*
+      int new_nextPos = nextPos * ...
+    */
+    servos[LEFT][SHOULDER].write(nextPos);
+    delay(100);
   }
 }
 
-void moveArm(int sa){
-  switch(abs(sa)){
-    case 3: //差が３
+void hit(int arm) {
+  switch (arm) {
+    case BOTH:
+      //右腕
+      servos[RIGHT][ELBOW].write(110);
+      servos[LEFT][ELBOW].write(70);
+      delay(200);
 
-    break;
-    case 2: //差が２
+      //左腕
+      servos[RIGHT][ELBOW].write(165);
+      servos[LEFT][ELBOW].write(15);
+      delay(200);
+      break;
 
-     break;
-    case 1:
+    case RIGHT:
+      //右腕
+      servos[RIGHT][ELBOW].write(110);
+      delay(200);
+      servos[RIGHT][ELBOW].write(165);
+      delay(200);
+      break;
 
-     break;
-    case 0:
-     break;
+    case LEFT:
+      //左腕
+      servos[LEFT][ELBOW].write(70);
+      delay(200);
+      servos[LEFT][ELBOW].write(15);
+      delay(200);
+      break;
   }
 }
-
-
-
-
-
-
-

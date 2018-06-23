@@ -56,15 +56,15 @@ RECORDにしたという情報をprocessingに「-1」という値で送る。
 WAITにしたという情報をprocessingに「-2」という値で送る。  
 
 音ボタンが入力されたら、
--押されたボタンの数字（6/24現在未実装）
--押された時の時刻（遅れる値のサイズの関係でmsからsに単位を変更）
+- 押されたボタンの数字（6/24現在未実装）
+- 押された時の時刻（遅れる値のサイズの関係でmsからsに単位を変更）
 連続でprocessingに送る。
 
 ## Processing側
 Processing側のコードはscore_sender.pdeが担当。  
 Arduinoに合わせてモードを切り替えるようにする。それをrecordingというbooleanの値に入れてお
--Arduinoから「-1」が送られたら```recording=true```
--Arduinoから「-2」が送られたら```recording=false```
+- Arduinoから「-1」が送られたら```recording=true```
+- Arduinoから「-2」が送られたら```recording=false```
 ※ もともとは文字列を送ろうとしたがprocessing側で比較を行うときにうまくいかないので数字にした
 
 ### recording = falseのとき
@@ -77,6 +77,6 @@ dataTypeToggleで場合分けをしながら2要素の配列に落とし込ん�
 
 ### outputScore()メソッド
 楽譜が記録されてるDequeueのインスタンスscoreをCSVファイルに出力する。形式は  
--1列目： 音の種類
--2列目： 演奏された時間
+- 1列目： 音の種類
+- 2列目： 演奏された時間
 ファイル名は```score.csv```。

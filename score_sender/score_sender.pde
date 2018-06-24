@@ -74,7 +74,7 @@ void serialEvent(Serial p){
 
 void outputScore(){
   //output score as csv file
-  PrintWriter output = createWriter("score.csv");
+  PrintWriter output = createWriter("../csv_files/score.csv");
   float[] tmp;
 
   while(score.size() > 0){

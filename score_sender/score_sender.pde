@@ -81,7 +81,7 @@ void outputScore(){
     tmp = score.remove();
     println("note=" + tmp[0] + ", time=" + tmp[1]);
     
-    output.println(tmp[0] + "," + tmp[1]);
+    output.println(tmp[0] + "," + tmp[1] + ";");
   }
   
   output.flush();

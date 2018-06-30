@@ -27,10 +27,13 @@ const int shoulderAngle[2][DRUM_NUM/2] = {{134, 90, 55}, {134, 90, 55}};
 //楽譜の長さ設定
 const int sheetLen = 4;
 
-//楽譜，０１2で左から順,-1は叩かない
-int sheet[2][SHEET_LEN];
-//sheet[0]: 右譜面
-//sheet[1]: 左譜面
+//楽譜関連
+//  読み込み先
+String str_notes[100];
+//  読み込み中判定
+boolean reading_notes;
+//  楽譜の番号
+int note_counter;
 
 //打った回数を入れるカウンタ
 int hitCounter = 0;
@@ -47,13 +50,23 @@ void setup() {
   servos[LEFT][ELBOW].attach(11);  // 11: 左肘
 
   //楽譜の初期化
-  for (int i = 0; i < sheetLen; i++) {
-    sheet[RIGHT][i] = -1;
-    sheet[LEFT][i] = -1;
-  }
+//  for (int i = 0; i < sheetLen; i++) {
+//    sheet[RIGHT][i] = -1;
+//    sheet[LEFT][i] = -1;
+//  }
+
+  //シリアル通信
+  Serial.begin(9600);
+
+  //楽譜読み込み状態をfalseに設定
+  reading_notes = false;
 }
 
 void loop() {
+  if (Serial.available() > 0){
+    readSerial();
+  }
+
   //T_MOVE ~ 5sec： reset直後、腕を動かす時間
   if (timer.hasPassed(T_MOVE) && timer.hasPassed(T_MOVE+5)) {
     int nextCount = hitCounter + 1;
@@ -98,6 +111,32 @@ void loop() {
     timer.restart();
   }
 
+}
+
+void readSerial(){
+  //「;」が出てくるまで読み込み続けて、String型に落とし込む
+  String input = Serial.readStringUntil(';');
+
+  if(!reading_notes){
+    //記録中で無い場合
+    if(input.equals("start")){
+      //楽譜の最初の行を受け取ったら
+      reading_notes = true;
+
+      //楽譜の番号も0に初期化
+      note_counter = 0;
+    }
+  } else {
+    //記録中の場合
+    if (input.equals("end")){
+      //楽譜の最後の行を受け取ったら
+      reading_notes = false;
+    } else if(input.indexOf(',') != -1) {
+      //形式通りの楽譜ならば
+      str_notes[note_counter] = input;
+      note_counter++;
+    }
+  }
 }
 
 void moveArm(int arm, int nextPos) {

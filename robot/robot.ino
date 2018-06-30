@@ -22,10 +22,7 @@ Chrono timer;
 Servo servos[2][2];
 
 //肩の位置の宣言
-/*
- * 左肩の角度に関してはまだ未実装なので修正する必要あり
- */
-const int shoulderAngle[2][DRUM_NUM/2] = {{165, 90, 15}, {15, 15, 15}};
+const int shoulderAngle[2][DRUM_NUM/2] = {{134, 90, 55}, {134, 90, 55}};
 
 //楽譜の長さ設定
 const int sheetLen = 4;
@@ -69,10 +66,8 @@ void loop() {
     //次の位置に移動
     moveArm(RIGHT, rightNextPos);
     //角度が未実装なため左のmoveArmはコメントアウト
-//    moveArm(LEFT , leftNextPos);
+    moveArm(LEFT , leftNextPos);
   }
-
-
 
   //T_IHT ~ 5sec: 腕を動かした後、打つタイミング
   if (timer.hasPassed(T_HIT) && !timer.hasPassed(T_HIT+5)) {
@@ -107,29 +102,23 @@ void loop() {
 
 void moveArm(int arm, int nextPos) {
   if(nextPos == -1) return;
-  
+
   if (arm == RIGHT) {
     servos[RIGHT][SHOULDER].write(shoulderAngle[RIGHT][nextPos]);
   } else {
-    //左腕ようの何かしらの計算が必要...?
-
-    /*
-      int new_nextPos = nextPos * ...
-    */
-    servos[LEFT][SHOULDER].write(nextPos);
-    delay(100);
+    servos[LEFT][SHOULDER].write(shoulderAngle[LEFT][nextPos]);
   }
 }
 
 void hit(int arm) {
   switch (arm) {
     case BOTH:
-      //右腕
-      servos[RIGHT][ELBOW].write(110);
-      servos[LEFT][ELBOW].write(70);
+      //打つ
+      servos[RIGHT][ELBOW].write(130);
+      servos[LEFT][ELBOW].write(50);
       delay(200);
 
-      //左腕
+      //戻す
       servos[RIGHT][ELBOW].write(165);
       servos[LEFT][ELBOW].write(15);
       delay(200);
@@ -137,7 +126,7 @@ void hit(int arm) {
 
     case RIGHT:
       //右腕
-      servos[RIGHT][ELBOW].write(110);
+      servos[RIGHT][ELBOW].write(130);
       delay(200);
       servos[RIGHT][ELBOW].write(165);
       delay(200);
@@ -145,7 +134,7 @@ void hit(int arm) {
 
     case LEFT:
       //左腕
-      servos[LEFT][ELBOW].write(70);
+      servos[LEFT][ELBOW].write(50);
       delay(200);
       servos[LEFT][ELBOW].write(15);
       delay(200);

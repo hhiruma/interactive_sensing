@@ -35,6 +35,8 @@ String str_notes[NOTE_LEN];
 int int_notes[NOTE_LEN][2];
 //  読み込み中判定
 boolean reading_notes;
+//  完成した楽譜を持ってるか判定
+boolean has_complete_sheet;
 //  楽譜の番号
 int note_counter;
 
@@ -63,11 +65,21 @@ void setup() {
 
   //楽譜読み込み状態をfalseに設定
   reading_notes = false;
+  has_complete_sheet = false;
 }
 
 void loop() {
+  if(!has_complete_sheet) {
+    //最初に完璧な楽譜を持っていない状態では何もしない
+    return;
+  }
+
   if (Serial.available() > 0){
     readSerial();
+
+    //Serial通信を受け取った場合はロボットは動かないようにする
+    //   ∵ 譜面が更新されているタイミングで動かすとサーボに変な入力しそう
+    return;
   }
 
   //T_MOVE ~ 5sec： reset直後、腕を動かす時間
@@ -134,6 +146,7 @@ void readSerial(){
     if (input.equals("end")){
       //楽譜の最後の行を受け取ったら
       reading_notes = false;
+      has_complete_sheet = true;
 
       //読み込んだString型のArrayを元にint型のArrayを生成する
       makeIntNotes(note_counter);

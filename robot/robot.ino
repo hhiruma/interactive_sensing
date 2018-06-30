@@ -155,28 +155,28 @@ void hit(int arm) {
       //打つ
       servos[RIGHT][ELBOW].write(130);
       servos[LEFT][ELBOW].write(50);
-      delay(200);
+      delay(100);
 
       //戻す
       servos[RIGHT][ELBOW].write(165);
       servos[LEFT][ELBOW].write(15);
-      delay(200);
+      delay(100);
       break;
 
     case RIGHT:
       //右腕
       servos[RIGHT][ELBOW].write(130);
-      delay(200);
+      delay(100);
       servos[RIGHT][ELBOW].write(165);
-      delay(200);
+      delay(100);
       break;
 
     case LEFT:
       //左腕
       servos[LEFT][ELBOW].write(50);
-      delay(200);
+      delay(100);
       servos[LEFT][ELBOW].write(15);
-      delay(200);
+      delay(100);
       break;
   }
 }

@@ -13,6 +13,7 @@
 #define T_RESET 1000
 
 #define SHEET_LEN 4
+#define NOTE_LEN 100
 #define DRUM_NUM 6
 
 //時間計測器
@@ -29,7 +30,9 @@ const int sheetLen = 4;
 
 //楽譜関連
 //  読み込み先
-String str_notes[100];
+String str_notes[NOTE_LEN];
+//  int型の楽譜読込先
+int int_notes[NOTE_LEN][2];
 //  読み込み中判定
 boolean reading_notes;
 //  楽譜の番号
@@ -131,11 +134,28 @@ void readSerial(){
     if (input.equals("end")){
       //楽譜の最後の行を受け取ったら
       reading_notes = false;
+
+      //読み込んだString型のArrayを元にint型のArrayを生成する
+      makeIntNotes(note_counter);
     } else if(input.indexOf(',') != -1) {
       //形式通りの楽譜ならば
       str_notes[note_counter] = input;
       note_counter++;
     }
+  }
+}
+
+void makeIntNotes(int len){
+  for(int i=0; i<len; i++){
+    String tmp = str_notes[i];
+
+    //input1:  一文字目に演奏する番号が必ず入ってくるので一文字目を取得
+    int input1 = int(tmp.charAt(0));
+    //input2:  カンマ以降（4文字目以降）がタイミングになるのでそれを取得
+    int input2 = tmp.substring(4).toInt();
+
+    int_notes[i][0] = input1;
+    int_notes[i][1] = input2;
   }
 }
 

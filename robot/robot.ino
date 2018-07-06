@@ -30,8 +30,6 @@ Servo servos[2][2];
 const int shoulderAngle[2][DRUM_NUM/2] = {{134, 90, 55}, {134, 90, 55}};
 
 //楽譜関連
-//  読み込み先
-String str_notes[NOTE_LEN];
 //  int型の楽譜読込先(ここに音が演奏されるタイミングをすべて書いていく)
 int int_notes[NOTE_LEN][2];
 //  編集した楽譜
@@ -145,31 +143,24 @@ void readSerial(){
         has_complete_sheet = true;
 
         //読み込んだString型のArrayを元にint型のArrayを生成する
-        makeIntNotes(note_counter);
         compileNotes(note_counter);
         return;
 //        setPlayTimer(note_counter);
       } else {
         //形式通りの楽譜ならば
-        str_notes[note_counter] = input;
+        convertToIntNote(note_counter, input);
         note_counter++;
       }
     }
   }
 }
 
-void makeIntNotes(int len){
-  for(int i=0; i<len; i++){
-    String tmp = str_notes[i];
+void convertToIntNote(int counter, String input){
+  int input_note = int(input.charAt(0));
+  int input_time = input.substring(4).toInt();
 
-    //input1:  一文字目に演奏する番号が必ず入ってくるので一文字目を取得
-    int input1 = int(tmp.charAt(0));
-    //input2:  カンマ以降（4文字目以降）がタイミングになるのでそれを取得
-    int input2 = tmp.substring(4).toInt();
-
-    int_notes[i][0] = input1;
-    int_notes[i][1] = input2;
-  }
+  int_notes[counter][0] = input_note;
+  int_notes[counter][1] = input_time;
 }
 
 void compileNotes(int len){

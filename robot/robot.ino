@@ -1,6 +1,7 @@
 #include <Chrono.h>
 #include <LightChrono.h>
 #include <Servo.h>
+#include <TimedAction.h> //読み込めるかはまだチェックしてない
 
 #define RIGHT 0
 #define LEFT 1
@@ -25,23 +26,27 @@ Servo servos[2][2];
 //肩の位置の宣言
 const int shoulderAngle[2][DRUM_NUM/2] = {{134, 90, 55}, {134, 90, 55}};
 
-//楽譜の長さ設定
-const int sheetLen = 4;
-
 //楽譜関連
 //  読み込み先
 String str_notes[NOTE_LEN];
-//  int型の楽譜読込先
+//  int型の楽譜読込先 (直接使用することは無いが、デバッグ用に作っておく)
 int int_notes[NOTE_LEN][2];
+//  TimedAction型の楽譜読込先
+TimedAction* playThreads;
+//  TimedAction型の音再生タイミングアラーム読込先
+TimedAction* playTimeSetter;
 //  読み込み中判定
 boolean reading_notes;
 //  完成した楽譜を持ってるか判定
 boolean has_complete_sheet;
 //  楽譜の番号
 int note_counter;
-
-//打った回数を入れるカウンタ
-int hitCounter = 0;
+//  TimedActionにのコールバックに渡す時に使うためのグローバル変数
+int global_selected_note;
+//  終了時刻
+int global_sheet_time;
+//  初回ループ判定
+boolean is_setup_loop;
 
 //次に打つ位置
 int rightNextPos;
@@ -54,26 +59,16 @@ void setup() {
   servos[LEFT][SHOULDER].attach(10);  // 10: 左肩
   servos[LEFT][ELBOW].attach(11);  // 11: 左肘
 
-  //楽譜の初期化
-//  for (int i = 0; i < sheetLen; i++) {
-//    sheet[RIGHT][i] = -1;
-//    sheet[LEFT][i] = -1;
-//  }
-
   //シリアル通信
   Serial.begin(9600);
 
   //楽譜読み込み状態をfalseに設定
   reading_notes = false;
   has_complete_sheet = false;
+  is_setup_loop = true;
 }
 
 void loop() {
-  if(!has_complete_sheet) {
-    //最初に完璧な楽譜を持っていない状態では何もしない
-    return;
-  }
-
   if (Serial.available() > 0){
     readSerial();
 
@@ -82,50 +77,36 @@ void loop() {
     return;
   }
 
-  //T_MOVE ~ 5sec： reset直後、腕を動かす時間
-  if (timer.hasPassed(T_MOVE) && timer.hasPassed(T_MOVE+5)) {
-    int nextCount = hitCounter + 1;
-    //ここで楽譜を読んでアーム移動
-
-    //次の位置
-    rightNextPos = sheet[RIGHT][nextCount % SHEET_LEN];
-    leftNextPos = sheet[LEFT][nextCount % SHEET_LEN];
-
-    //次の位置に移動
-    moveArm(RIGHT, rightNextPos);
-    //角度が未実装なため左のmoveArmはコメントアウト
-    moveArm(LEFT , leftNextPos);
+  if(!has_complete_sheet) {
+    //最初に完璧な楽譜を持っていない状態では何もしない
+    return;
   }
-
-  //T_IHT ~ 5sec: 腕を動かした後、打つタイミング
-  if (timer.hasPassed(T_HIT) && !timer.hasPassed(T_HIT+5)) {
-    if (sheet[RIGHT][hitCounter % SHEET_LEN] != -1) {
-      if (sheet[LEFT][hitCounter % SHEET_LEN] != -1) {
-        hit(BOTH);
-      } else {
-        hit(RIGHT);
-      }
-    } else {
-      if (sheet[LEFT][hitCounter % SHEET_LEN] != -1) {
-        hit(LEFT);
-      }
+  
+//  //セットアップ用の初回周期では
+//  if(is_setup_loop){
+//    //int_notesの各音に対して該当する値があるか確認
+////    Serial.println(String(timer.elapsed()));
+//    for(int i=0; i<note_counter; i++){
+//      if(timer.hasPassed(int_notes[i][1]) && !timer.hasPassed(int(int_notes[i][1]) + 200)){
+//        //タイミングが合ったら、スレッドを有効化する
+//        playThreads[i].reset();
+//        playThreads[i].enable();
+//        String tmp = "enable : " + i;
+//        Serial.println("enable");
+//
+//        if(i == note_counter-1){
+//          //最後の音のセットアップが完了したら
+//          is_setup_loop = false;
+//          Serial.println("setup done");
+//        }
+//      }
+//    }
+//    return;
+//  } else {
+    for(int i=0; i<note_counter; i++){
+      playThreads[i].check();
     }
-  }
-
-
-  //T_RESET: 全ての作業が終わってると見込まれる時間
-  if (timer.hasPassed(T_RESET)) {
-    //hitCounterが大きくなりすぎたとき用
-    if (hitCounter < 5001) {
-      hitCounter++;
-    } else {
-      hitCounter = (hitCounter + 1) % SHEET_LEN;
-    }
-
-    //タイマーをリセットする
-    timer.restart();
-  }
-
+//  }
 }
 
 void readSerial(){
@@ -137,28 +118,53 @@ void readSerial(){
     if(input.equals("start")){
       //楽譜の最初の行を受け取ったら
       reading_notes = true;
+      is_setup_loop = true;
+      has_complete_sheet = false;
 
       //楽譜の番号も0に初期化
       note_counter = 0;
     }
   } else {
     //記録中の場合
-    if (input.equals("end")){
-      //楽譜の最後の行を受け取ったら
-      reading_notes = false;
-      has_complete_sheet = true;
+    if(input.indexOf(',') != -1) {
+      //最後の場合
+      if(input.indexOf("end") != -1){
+        global_sheet_time = input.substring(4).toInt();
 
-      //読み込んだString型のArrayを元にint型のArrayを生成する
-      makeIntNotes(note_counter);
-    } else if(input.indexOf(',') != -1) {
-      //形式通りの楽譜ならば
-      str_notes[note_counter] = input;
-      note_counter++;
+        //楽譜の最後の行を受け取ったら
+        reading_notes = false;
+        has_complete_sheet = true;
+
+        //読み込んだString型のArrayを元にint型のArrayを生成する
+        makeIntNotes(note_counter);
+        makeTimedActionNotes(note_counter);
+        setPlayTimer(note_counter);
+      } else {
+        //形式通りの楽譜ならば
+        str_notes[note_counter] = input;
+        note_counter++;
+      }
     }
   }
 }
 
+int global_next_note_num = 0;
+void setPlayTimer(int len){
+  Serial.println("setPlayTimer");
+//  playTimeSetter = malloc(len);
+  for(int i=0; i<len; i++){
+    global_next_note_num = i;
+    playTimeSetter[i] = TimedAction(int_notes[i][1], enablePlayer);
+  }
+}
+
+void enablePlayer(){
+  Serial.println(String(global_next_note_num));
+  playThreads[global_next_note_num].enable();
+}
+
 void makeIntNotes(int len){
+  Serial.println("makeIntNotes");
   for(int i=0; i<len; i++){
     String tmp = str_notes[i];
 
@@ -170,6 +176,43 @@ void makeIntNotes(int len){
     int_notes[i][0] = input1;
     int_notes[i][1] = input2;
   }
+}
+
+void makeTimedActionNotes(int len){
+  Serial.println("makeTimedActionNotes");
+//  playThreads = malloc(len);
+  //バグ発生の可能性: makeIntNotesが全部実行し終わるまで待つのか...?
+  for(int i=0; i<len; i++){
+    global_selected_note = int_notes[i][0];
+    playThreads[i] = TimedAction(global_sheet_time, playNote);
+    //作った段階ではまだ無効化しておく
+    playThreads[i].disable();
+  }
+}
+
+void playNote(){
+  /***/
+  Serial.println("playNote executed");
+  /***/
+  
+  //TimeActionはコールバックに引数を渡せないためグローバルに一旦入れておいたので、それを持ってくる
+  int note = global_selected_note;
+  //エラー検知用に-1に戻しておく
+  global_selected_note = -1;
+
+  //腕を選択する
+  int chosenArm = getArm(note);
+  //腕を動かす
+  moveArm(chosenArm, note);
+  //打つ
+  hit(chosenArm);
+}
+
+int getArm(int note){
+  //演奏する音の番号から腕を返す
+
+  //一時的にRIGHTを返すようにしておく
+  return RIGHT;
 }
 
 void moveArm(int arm, int nextPos) {

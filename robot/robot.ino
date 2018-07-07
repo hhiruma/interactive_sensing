@@ -27,7 +27,7 @@ Chrono timer;
 Servo servos[2][2];
 
 //肩の位置の宣言 {RIGHT, LEFT}
-const int shoulderAngle[2][DRUM_NUM/2] = {{55, 90, 134}, {134, 90, 55}};
+const int shoulderAngle[2][DRUM_NUM/2] = {{55, 90, 134}, {55, 90, 134}};
 
 //楽譜関連
 //  int型の楽譜読込先(ここに音が演奏されるタイミングをすべて書いていく)
@@ -80,7 +80,12 @@ void loop() {
     return;
   }
 
-  if(timer.hasPassed(compiled_note[note_position][0])){
+  if(note_position >= compiled_notes_len){
+    if(timer.hasPassed(global_sheet_time)){
+      note_position = 0;
+      timer.restart();
+    }
+  } else if(timer.hasPassed(compiled_note[note_position][0])){
     //ちょうど通過したら
     //腕を確認
     int arm = getArm(compiled_note[note_position][2]);
@@ -103,10 +108,6 @@ void loop() {
     }
 
     note_position++;
-    if(note_position >= compiled_notes_len){
-      note_position = 0;
-      timer.restart();
-    }
   }
 }
 

@@ -13,7 +13,7 @@
 #define T_RESET 1000
 
 #define SHEET_LEN 4
-#define NOTE_LEN 100
+#define NOTE_LEN 50
 #define DRUM_NUM 6
 
 #define HIT 0
@@ -26,13 +26,14 @@ Chrono timer;
 //サーボの宣言
 Servo servos[2][2];
 
-//肩の位置の宣言
-const int shoulderAngle[2][DRUM_NUM/2] = {{134, 90, 55}, {134, 90, 55}};
+//肩の位置の宣言 {RIGHT, LEFT}
+const int shoulderAngle[2][DRUM_NUM/2] = {{55, 90, 134}, {134, 90, 55}};
 
 //楽譜関連
 //  int型の楽譜読込先(ここに音が演奏されるタイミングをすべて書いていく)
 int int_notes[NOTE_LEN][2];
 //  編集した楽譜
+//   {タイミング, MOVE/HIT, 音}　
 int compiled_note[NOTE_LEN*2][3];
 //  読み込み中判定
 boolean reading_notes;
@@ -42,6 +43,10 @@ boolean has_complete_sheet;
 int note_counter;
 //  終了時刻
 int global_sheet_time;
+//  演奏済みの番号
+int note_position;
+//　コンパイルされた楽譜の長さを格納
+int compiled_notes_len;
 
 //次に打つ位置
 int rightNextPos;
@@ -71,55 +76,44 @@ void loop() {
     return;
   }
 
-  // //T_MOVE ~ 5sec： reset直後、腕を動かす時間
-  // if (timer.hasPassed(T_MOVE) && timer.hasPassed(T_MOVE+5)) {
-  //   int nextCount = hitCounter + 1;
-  //   //ここで楽譜を読んでアーム移動
+  if (!has_complete_sheet){
+    return;
+  }
 
-  //   //次の位置
-  //   rightNextPos = sheet[RIGHT][nextCount % SHEET_LEN];
-  //   leftNextPos = sheet[LEFT][nextCount % SHEET_LEN];
+  if(timer.hasPassed(compiled_note[note_position][0])){
+    //ちょうど通過したら
+    //腕を確認
+    int arm = getArm(compiled_note[note_position][2]);
 
-  //   //次の位置に移動
-  //   moveArm(RIGHT, rightNextPos);
-  //   //角度が未実装なため左のmoveArmはコメントアウト
-  //   moveArm(LEFT , leftNextPos);
-  // }
+    //HIT / MOVEを確認
+    switch(compiled_note[note_position][1]){
+      case HIT:
+        Serial.print("HIT: time=");
+        Serial.print(compiled_note[note_position][0]);
+        Serial.print(" note=");
+        Serial.println(compiled_note[note_position][2]);
+        hit(arm);
+        break;
+      case MOVE:
+        Serial.print("MOVE: time=");
+        Serial.print(compiled_note[note_position][0]);
+        Serial.print(" note=");
+        Serial.println(compiled_note[note_position][2]);
+        moveArm(arm, compiled_note[note_position][2]);
+    }
 
-  // //T_IHT ~ 5sec: 腕を動かした後、打つタイミング
-  // if (timer.hasPassed(T_HIT) && !timer.hasPassed(T_HIT+5)) {
-  //   if (sheet[RIGHT][hitCounter % SHEET_LEN] != -1) {
-  //     if (sheet[LEFT][hitCounter % SHEET_LEN] != -1) {
-  //       hit(BOTH);
-  //     } else {
-  //       hit(RIGHT);
-  //     }
-  //   } else {
-  //     if (sheet[LEFT][hitCounter % SHEET_LEN] != -1) {
-  //       hit(LEFT);
-  //     }
-  //   }
-  // }
-
-
-  // //T_RESET: 全ての作業が終わってると見込まれる時間
-  // if (timer.hasPassed(T_RESET)) {
-  //   //hitCounterが大きくなりすぎたとき用
-  //   if (hitCounter < 5001) {
-  //     hitCounter++;
-  //   } else {
-  //     hitCounter = (hitCounter + 1) % SHEET_LEN;
-  //   }
-
-  //   //タイマーをリセットする
-  //   timer.restart();
-  // }
-
+    note_position++;
+    if(note_position >= compiled_notes_len){
+      note_position = 0;
+      timer.restart();
+    }
+  }
 }
 
 void readSerial(){
   //「;」が出てくるまで読み込み続けて、String型に落とし込む
   String input = Serial.readStringUntil(';');
+
 
   if(!reading_notes){
     //記録中で無かった場合
@@ -145,7 +139,9 @@ void readSerial(){
         //読み込んだString型のArrayを元にint型のArrayを生成する
         compileNotes(note_counter);
         return;
-//        setPlayTimer(note_counter);
+
+        //読み込み終わった瞬間にタイマーをリスタートする
+        timer.restart();
       } else {
         //形式通りの楽譜ならば
         convertToIntNote(note_counter, input);
@@ -156,7 +152,7 @@ void readSerial(){
 }
 
 void convertToIntNote(int counter, String input){
-  int input_note = int(input.charAt(0));
+  int input_note = ((String)input.charAt(0)).toInt();
   int input_time = input.substring(4).toInt();
 
   int_notes[counter][0] = input_note;
@@ -164,20 +160,18 @@ void convertToIntNote(int counter, String input){
 }
 
 void compileNotes(int len){
-  int prevNote = -1;
+  boolean firstNote = true;
   int counter = 0;
+  int currentArm;
+  int prevArm;
 
   for(int i=0; i<len; i++){
-    //使用する腕を求める
-    int currentArm = getArm(int_notes[i]);
-    int prevArm = getArm(prevNote);
-
     //１つ前の楽譜で呼び出された音で場合分けする
     //    ∵それによってdelayのかけ方が変わってくるから
     //    memo: １回の行動にかかる時間はACTION_TIMEmsとする
-    if (prevArm == -1){
-      //１個前が-1　-> 今回が最初に演奏される音
-      if(counter != 0) Serial.println("error");
+    if (firstNote){
+      //今回が最初に演奏される音だった
+      firstNote = false;
 
       //とりあえず腕の位置を動かす
       int tmp = int_notes[i][1] - ACTION_TIME;
@@ -192,10 +186,12 @@ void compileNotes(int len){
       //そのまま打つ
       compiled_note[counter][0] =  int_notes[i][1];
       compiled_note[counter][1] =  HIT;
-      compiled_note[counter][2] = -1;
+      compiled_note[counter][2] =  int_notes[i][0];
       counter++;
     } else {
       //２回め以降
+      currentArm = getArm(int_notes[i]);
+      prevArm = getArm(int_notes[i-1]);
 
       int prevSameArmIndex;
       if(prevArm != currentArm){
@@ -204,7 +200,12 @@ void compileNotes(int len){
         //今回使用する腕を前回使用したindexを得る
         for(int j=i-1;;j--){
           if(j < 0){
-            Serial.println("error");
+            Serial.println("no same arm used previously");
+            /*
+             * 前に同じ腕を使用したことがない場合の対処法未実装
+             */
+            prevSameArmIndex = -1;
+            break;
           }
           if (getArm(int_notes[j]) == getArm(int_notes[i])){
             prevSameArmIndex = j;
@@ -224,7 +225,7 @@ void compileNotes(int len){
 
         compiled_note[counter][0] =  int_notes[i][1];
         compiled_note[counter][1] =  HIT;
-        compiled_note[counter][2] = -1;
+        compiled_note[counter][2] =  int_notes[i][0];
         counter++;
       } else {
         //違う場合
@@ -232,31 +233,41 @@ void compileNotes(int len){
         //前回打ったタイミングと今回打つタイミングの差がACTION_TIMEms以下の場合ずらすかどうかを判定して実行する
         shiftTimeDiffIfOverlapp(i, prevSameArmIndex, len, ACTION_TIME*2);
 
-        compiled_note[counter][0] =  int_notes[i][1]-200;
+        compiled_note[counter][0] =  int_notes[i][1]-ACTION_TIME;
         compiled_note[counter][1] =  MOVE;
         compiled_note[counter][2] = int_notes[i][0];
         counter++;
 
         compiled_note[counter][0] =  int_notes[i][1];
         compiled_note[counter][1] =  HIT;
-        compiled_note[counter][2] = -1;
+        compiled_note[counter][2] =  int_notes[i][0];
         counter++;
       }
 
       prevArm = currentArm;
     }
   }
-
-  Serial.println("done");
+  //コンパイルされた楽譜の長さを格納する
+  compiled_notes_len = counter;
 }
 
-void shiftTimeDiffIfOverlapp(int index, int prevIndex, int arrLen, int a_time){
+
+void shiftTimeDiffIfOverlapp(int index, int prevIndex, int arrLen, int aTime){
   //前回打ったタイミングと今回打つタイミングの差がACTION_TIMEms以下の場合
   int timeDiff = int_notes[index][1] - int_notes[prevIndex][1];
-  if(timeDiff < a_time){
+
+  if(timeDiff < aTime){
+    int incrementTime;
+
+    if(timeDiff >= 0){
+      incrementTime = aTime - timeDiff;
+    } else {
+      incrementTime = aTime + timeDiff;
+    }
+
     //指定index以降のdiff[ms]だけすべての楽譜をずらす
     for(int i=index; i<arrLen; i++){
-      int_notes[i][1] += timeDiff;
+      int_notes[i][1] += incrementTime;
     }
   }
 
@@ -268,10 +279,10 @@ void shiftTimeDiffIfOverlapp(int index, int prevIndex, int arrLen, int a_time){
 
 int getArm(int note){
   //演奏する音の番号から腕を返す
-  if(note >= 0 && note <=2){
-    return RIGHT;
-  } else if (note >= 3 && note <= 5){
+  if(note >= 1 && note <=3){
     return LEFT;
+  } else if (note >= 4 && note <= 6){
+    return RIGHT;
   } else {
     return -1;
   }
@@ -280,41 +291,60 @@ int getArm(int note){
 void moveArm(int arm, int nextPos) {
   if(nextPos == -1) return;
 
+  int dest;
+
+  switch(nextPos){
+    case 1:
+      dest = shoulderAngle[LEFT][0]; break;
+    case 2:
+      dest = shoulderAngle[LEFT][1]; break;
+    case 3:
+      dest = shoulderAngle[LEFT][2]; break;
+    case 4:
+      dest = shoulderAngle[RIGHT][0]; break;
+    case 5:
+      dest = shoulderAngle[RIGHT][1]; break;
+    case 6:
+      dest = shoulderAngle[RIGHT][2]; break;
+  }
+
   if (arm == RIGHT) {
-    servos[RIGHT][SHOULDER].write(shoulderAngle[RIGHT][nextPos]);
+    servos[RIGHT][SHOULDER].write(dest);
   } else {
-    servos[LEFT][SHOULDER].write(shoulderAngle[LEFT][nextPos]);
+      servos[LEFT][SHOULDER].write(dest);
   }
 }
 
 void hit(int arm) {
+  int makeDelay = 100;
+
   switch (arm) {
     case BOTH:
       //打つ
       servos[RIGHT][ELBOW].write(130);
       servos[LEFT][ELBOW].write(50);
-      delay(100);
+      delay(makeDelay);
 
       //戻す
       servos[RIGHT][ELBOW].write(165);
       servos[LEFT][ELBOW].write(15);
-      delay(100);
+      delay(makeDelay);
       break;
 
     case RIGHT:
       //右腕
       servos[RIGHT][ELBOW].write(130);
-      delay(100);
+      delay(makeDelay);
       servos[RIGHT][ELBOW].write(165);
-      delay(100);
+      delay(makeDelay);
       break;
 
     case LEFT:
       //左腕
       servos[LEFT][ELBOW].write(50);
-      delay(100);
+      delay(makeDelay);
       servos[LEFT][ELBOW].write(15);
-      delay(100);
+      delay(makeDelay);
       break;
   }
 }

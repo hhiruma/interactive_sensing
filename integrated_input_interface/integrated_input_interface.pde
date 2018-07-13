@@ -316,3 +316,10 @@ void keyPressed(){
 
     }
 }
+
+void serialEvent(Serial p){
+  String message = port.readStringUntil(13);
+  if (message != null){
+    println(message);
+  }
+}
